@@ -4,7 +4,34 @@ const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const winston = require('winston');
+const { OAuth2Client } = require('google-auth-library');
+const client = new OAuth2Client('749205985972-67v5ar7e1nint15rlt9uj61adbf93boq.apps.googleusercontent.com');
+const firebase = require("firebase/app");
+const admin = require('firebase-admin');
+require("firebase/analytics");
 
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCLKeCzq-Z1RuqtKvIPKq9HsaGQhAafztM",
+  authDomain: "chat-pixel-5bbc6.firebaseapp.com",
+  projectId: "chat-pixel-5bbc6",
+  storageBucket: "chat-pixel-5bbc6.firebasestorage.app",
+  messagingSenderId: "749205985972",
+  appId: "1:749205985972:web:fb236aab21e5a08af995e1",
+  measurementId: "G-7D223B155Z"
+};
+
+// Initialize Firebase
+const firebaseApp = firebase.initializeApp(firebaseConfig);
+
+const serviceAccount = require('./firebase-adminsdk.json'); // Substitua pelo caminho do arquivo JSON do serviço
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 // Configuração do logger
 const logger = winston.createLogger({
   level: 'info',
@@ -44,6 +71,45 @@ app.use((req, res, next) => {
 app.use(cors({
   origin: '*',
 }));
+
+// Rota de autenticação
+app.post('/login', async (req, res) => {
+  const { idToken } = req.body;
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+      name: decodedToken.name,
+    };
+    res.status(200).json({ user });
+  } catch (error) {
+    logger.error('Erro na autenticação:', error.message);
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+async function verifyToken(idToken) {
+  const ticket = await client.verifyIdToken({
+    idToken: idToken,
+    audience: '749205985972-67v5ar7e1nint15rlt9uj61adbf93boq.apps.googleusercontent.com',  // Substitua pelo seu Client ID
+  });
+  const payload = ticket.getPayload();
+  console.log(payload);
+  return payload; // Informações do usuário autenticado
+}
+
+// Exemplo de endpoint no backend para verificar o token
+app.post('/api/auth', async (req, res) => {
+  const { token } = req.body;
+
+  try {
+    const user = await verifyToken(token);
+    res.json({ message: 'Autenticação bem-sucedida', user });
+  } catch (error) {
+    res.status(400).json({ message: 'Falha na autenticação', error });
+  }
+});
 
 // Servindo arquivos estáticos
 const publicPath = path.join(__dirname, 'public');
@@ -134,7 +200,7 @@ app.get('/', (req, res) => {
 });
 
 // Inicialização do servidor
-const PORT = 3000;
+const PORT = 80;
 server.listen(PORT, () => {
   logger.info(`Servidor iniciado na porta ${PORT}`);
 });
